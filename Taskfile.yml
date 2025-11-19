@@ -1,0 +1,164 @@
+# https://taskfile.dev
+
+version: '3'
+
+# -------------------------------------------------------------------
+# GLOBAL VARIABLES (optional defaults – can be overridden)
+# -------------------------------------------------------------------
+vars:
+  CLOUD: ""
+  WORKSPACE_SUFFIX: "cloud-dynamic-credentials"
+
+# -------------------------------------------------------------------
+# ENTRYPOINTS
+# -------------------------------------------------------------------
+
+tasks:
+  # ------------------------------
+  # General prepare
+  # ------------------------------
+  prepare:
+    cmds:
+      - terraform fmt -recursive
+
+  # ------------------------------
+  # Deploy any cloud: AWS / AZURE / GCP
+  # Example:
+  #   task deploy CLOUD=aws
+  # ------------------------------
+  deploy:
+    desc: Deploy trust + workspace
+    cmds:
+      - task: trust
+        vars: { CLOUD: "{{.CLOUD}}" }
+      - task: workspace
+        vars: { CLOUD: "{{.CLOUD}}" }
+
+  # ------------------------------
+  # Cloud Aliases
+  # ------------------------------
+  deploy-aws:   #source ./aws/.env
+    desc: "Deploy AWS infra"
+    cmds:
+      - task: deploy
+        vars: { CLOUD: "aws" }
+
+  deploy-azure:  #source ./azure/.env
+    desc: "Deploy Azure infra"
+    cmds:
+      - task: deploy
+        vars: { CLOUD: "azure" }
+
+  deploy-gcp:  #source ./gcp/.env
+    desc: "Deploy GCP infra"
+    cmds:
+      - task: deploy
+        vars: { CLOUD: "gcp" }
+
+  # ------------------------------
+  # Destroy everything
+  # Example:
+  #   task destroy CLOUD=aws TFC_TOKEN=$TFC_TOKEN
+  # ------------------------------
+  destroy:
+    desc: Destroy all infrastructure + workspace + trust
+    cmds:
+      - task: switch-local
+        vars:
+          CLOUD: "{{.CLOUD}}"
+          WORKSPACE_NAME: "{{.CLOUD}}-{{.WORKSPACE_SUFFIX}}"
+          TFC_TOKEN: "{{.TFC_TOKEN}}"
+      - task: infra-destroy
+        vars: { CLOUD: "{{.CLOUD}}" }
+      - task: workspace-destroy
+        vars: { CLOUD: "{{.CLOUD}}" }
+      - task: trust-destroy
+        vars: { CLOUD: "{{.CLOUD}}" }
+
+  destroy-aws:   #source ./aws/.env
+    desc: "Destroy AWS infra"
+    cmds:
+      - task: destroy
+        vars: { CLOUD: "aws", TFC_TOKEN: "{{.TFC_TOKEN}}" }
+
+  destroy-azure:  #source ./azure/.env
+    desc: "Destroy Azure infra"
+    cmds:
+      - task: destroy
+        vars: { CLOUD: "azure", TFC_TOKEN: "{{.TFC_TOKEN}}" }
+
+  destroy-gcp:  #source ./gcp/.env
+    desc: "Destroy GCP infra"
+    cmds:
+      - task: destroy
+        vars: { CLOUD: "gcp", TFC_TOKEN: "{{.TFC_TOKEN}}" }
+
+# -------------------------------------------------------------------
+# DEPLOY TASKS
+# -------------------------------------------------------------------
+
+  trust:
+    desc: "Run trust setup for cloud"
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/trust"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform apply
+
+  workspace:
+    desc: "Create HCP Terraform workspace for deploying infra"
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/workspace"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform apply
+
+# -------------------------------------------------------------------
+# DESTROY TASKS
+# -------------------------------------------------------------------
+
+  infra-destroy:
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/infra"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform destroy
+
+  workspace-destroy:
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/workspace"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform destroy
+
+  trust-destroy:
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/trust"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform destroy
+
+# -------------------------------------------------------------------
+# Switch workspace to local execution before destroying
+# -------------------------------------------------------------------
+  switch-local:
+    desc: Set workspace execution mode to local (required before destroying VCS-backed workspace)
+    cmds:
+      - bash ./scripts/hcp_switch_workspace.sh {{.WORKSPACE_NAME}} {{.TFC_TOKEN}}
+    env:
+      TFC_TOKEN: '{{.TFC_TOKEN}}'
+
+  switch-local-workspace:
+    desc: Set workspace execution mode to local for any workspace
+    cmds:
+      - bash ./scripts/hcp_switch_workspace.sh {{.WORKSPACE_NAME}} {{.TFC_TOKEN}}
+    vars:
+      WORKSPACE_NAME: aws-cloud-dynamic-credentials
+      TFC_TOKEN: '{{.TFC_TOKEN}}'
+    env:
+      TFC_TOKEN: '{{.TFC_TOKEN}}'

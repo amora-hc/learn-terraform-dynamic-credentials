@@ -1,3 +1,4 @@
+## Used for deleting resources ##
 terraform {
   required_providers {
     aws = {
@@ -6,8 +7,9 @@ terraform {
     }
   }
   cloud {
+    organization = "amora-hc"
     workspaces {
-      name = "learn-terraform-dynamic-credentials"
+      name = "aws-cloud-dynamic-credentials"
     }
   }
 }

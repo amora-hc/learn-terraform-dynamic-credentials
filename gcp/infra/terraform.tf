@@ -6,8 +6,9 @@ terraform {
     }
   }
   cloud {
+    organization = "amora-hc"
     workspaces {
-      name = "learn-terraform-dynamic-credentials"
+      name = "gcp-cloud-dynamic-credentials"
     }
   }
 }
