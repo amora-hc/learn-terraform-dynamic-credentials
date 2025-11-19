@@ -1,0 +1,228 @@
+# https://taskfile.dev
+
+version: '3'
+
+# -------------------------------------------------------------------
+# GLOBAL VARIABLES (optional defaults – can be overridden)
+# -------------------------------------------------------------------
+vars:
+  CLOUD: ""
+  WORKSPACE_SUFFIX: "cloud-dynamic-credentials"
+
+# -------------------------------------------------------------------
+# ENTRYPOINTS
+# -------------------------------------------------------------------
+
+tasks:
+  # ------------------------------
+  # General prepare
+  # ------------------------------
+  prepare:
+    cmds:
+      - terraform fmt -recursive
+
+  # ------------------------------
+  # Deploy any cloud: AWS / AZURE / GCP
+  # Example:
+  #   task deploy CLOUD=aws
+  # ------------------------------
+  deploy:
+    desc: Deploy trust + workspace
+    cmds:
+      # Run cluster step only for eks
+      - task: eks-cluster
+        vars: { CLOUD: "{{.CLOUD}}" }
+      # Always run trust + workspace  
+      - task: trust
+        vars: { CLOUD: "{{.CLOUD}}" }
+      - task: workspace
+        vars: { CLOUD: "{{.CLOUD}}" }
+
+  # ------------------------------
+  # Cloud Aliases
+  # ------------------------------
+  deploy-aws:   #source ./aws/.env
+    desc: "Deploy AWS infra"
+    cmds:
+      - task: deploy
+        vars: { CLOUD: "aws" }
+
+  deploy-azure:  #source ./azure/.env
+    desc: "Deploy Azure infra"
+    cmds:
+      - task: deploy
+        vars: { CLOUD: "azure" }
+
+  deploy-gcp:  #source ./gcp/.env
+    desc: "Deploy GCP infra"
+    cmds:
+      - task: deploy
+        vars: { CLOUD: "gcp" }
+
+  deploy-eks:   #source ./eks/.env
+    desc: "Deploy EKS infra"
+    cmds:
+      - task: deploy
+        vars: { CLOUD: "eks" }
+
+  # ------------------------------
+  # Destroy everything
+  # Example:
+  #   task destroy CLOUD=aws TFC_TOKEN=$TFC_TOKEN
+  # ------------------------------
+  destroy:
+    desc: Destroy all infrastructure + workspace + trust
+    cmds:
+      - task: switch-local
+        vars:
+          CLOUD: "{{.CLOUD}}"
+          WORKSPACE_NAME: "{{.CLOUD}}-{{.WORKSPACE_SUFFIX}}"
+          TFC_TOKEN: "{{.TFC_TOKEN}}"
+      # Always destroy infra + trust + workspace    
+      - task: infra-destroy
+        vars: { CLOUD: "{{.CLOUD}}" }
+      - task: workspace-destroy
+        vars: { CLOUD: "{{.CLOUD}}" }
+      - task: trust-destroy
+        vars: { CLOUD: "{{.CLOUD}}" }
+      # Run cluster destroy only for eks
+      - task: eks-cluster-destroy
+        vars: { CLOUD: "{{.CLOUD}}" }  
+
+  destroy-aws:   #source ./aws/.env
+    desc: "Destroy AWS infra"
+    cmds:
+      - task: destroy
+        vars: { CLOUD: "aws", TFC_TOKEN: "{{.TFC_TOKEN}}" }
+
+  destroy-azure:  #source ./azure/.env
+    desc: "Destroy Azure infra"
+    cmds:
+      - task: destroy
+        vars: { CLOUD: "azure", TFC_TOKEN: "{{.TFC_TOKEN}}" }
+
+  destroy-gcp:  #source ./gcp/.env
+    desc: "Destroy GCP infra"
+    cmds:
+      - task: destroy
+        vars: { CLOUD: "gcp", TFC_TOKEN: "{{.TFC_TOKEN}}" }
+      
+  destroy-eks:   #source ./eks/.env
+    desc: "Destroy EKS infra"
+    cmds:
+      - task: destroy
+        vars: { CLOUD: "eks", TFC_TOKEN: "{{.TFC_TOKEN}}" }
+
+# -------------------------------------------------------------------
+# DEPLOY TASKS
+# -------------------------------------------------------------------
+
+  # Run only when CLOUD == eks
+  eks-cluster:
+    desc: "Deploy EKS cluster (eks only)"
+    preconditions:
+      - sh: '[ "{{.CLOUD}}" = "eks" ]'
+        msg: "Skipping cluster deploy because CLOUD != eks"
+    dir: "./eks/cluster"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform apply
+      # ---- Post deployment tasks ----
+      # 1. Generate kubeconfig for the cluster
+      - |
+        CLUSTER_NAME=$(terraform output -raw cluster-name)
+        REGION=$(terraform output -raw cluster-region)
+        aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" --alias "$CLUSTER_NAME"
+        kubectl config use-context "$CLUSTER_NAME"
+      ## DELETED ##
+      # CLUSTER_ROLE_ARN=$(terraform output -raw cluster-role-arn)
+      # aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" --alias "$CLUSTER_NAME" --role-arn "$CLUSTER_ROLE_ARN"
+      # 2. Add your IAM user to system:masters in aws-auth ConfigMap
+      #- |
+      #  IAM_USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+      #  kubectl get configmap aws-auth -n kube-system -o yaml > /tmp/aws-auth.yaml
+      #  cat /tmp/aws-auth.yaml
+      #  yq eval '.data.mapUsers += "- userarn: \"'"$IAM_USER_ARN"'\"\n  username: admin\n  groups:\n    - system:masters"' -i /tmp/aws-auth.yaml
+      #  kubectl apply -f /tmp/aws-auth.yaml
+      # 3. Verify access
+      - kubectl get nodes
+      - kubectl get clusterrolebindings
+
+  trust:
+    desc: "Run trust setup for cloud"
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/trust"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform apply
+
+  workspace:
+    desc: "Create HCP Terraform workspace for deploying infra"
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/workspace"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform apply
+
+# -------------------------------------------------------------------
+# DESTROY TASKS
+# -------------------------------------------------------------------
+
+  infra-destroy:
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/infra"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform destroy
+
+  workspace-destroy:
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/workspace"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform destroy
+
+  trust-destroy:
+    deps: ["prepare"]
+    dir: "./{{.CLOUD}}/trust"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform destroy
+
+  # Run only when CLOUD == eks
+  eks-cluster-destroy:
+    desc: "Destroy EKS cluster (eks only)"
+    preconditions:
+      - sh: '[ "{{.CLOUD}}" = "eks" ]'
+        msg: "cloud-mismatch"
+    dir: "./eks/cluster"
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform destroy    
+
+# -------------------------------------------------------------------
+# Switch workspace to local execution before destroying
+# -------------------------------------------------------------------
+  switch-local:
+    desc: Set workspace execution mode to local (required before destroying VCS-backed workspace)
+    cmds:
+      - bash ./scripts/hcp_switch_workspace.sh {{.WORKSPACE_NAME}} {{.TFC_TOKEN}}
+    env:
+      TFC_TOKEN: '{{.TFC_TOKEN}}'
+
+  switch-local-workspace:
+    desc: Set workspace execution mode to local for any workspace
+    cmds:
+      - bash ./scripts/hcp_switch_workspace.sh {{.WORKSPACE_NAME}} {{.TFC_TOKEN}}
+    vars:
+      WORKSPACE_NAME: aws-cloud-dynamic-credentials
+      TFC_TOKEN: '{{.TFC_TOKEN}}'
+    env:
+      TFC_TOKEN: '{{.TFC_TOKEN}}'

@@ -3,10 +3,10 @@
 
 output "cluster-endpoint-url" {
   description = "URL of the cluster API server"
-  value       = data.aws_eks_cluster.upstream.endpoint
+  value = data.terraform_remote_state.cluster.outputs.cluster-endpoint-url
 }
 
 output "cluster-endpoint-ca" {
   description = "CA certificate of the cluster API server"
-  value       = data.aws_eks_cluster.upstream.certificate_authority[0].data
+  value = data.terraform_remote_state.cluster.outputs.cluster-endpoint-ca
 }

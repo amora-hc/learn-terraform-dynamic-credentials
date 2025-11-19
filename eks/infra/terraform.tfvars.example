@@ -1,2 +1,5 @@
 cluster-endpoint-url = "<URL-of-cluster-API>"
 cluster-endpoint-ca  = "<Base64-Encoded-CA>"
+cluster_name         = "test-eks-cluster"
+cluster_region       = "us-east-2"
+enable_k8s_resources = false

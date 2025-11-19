@@ -1,16 +1,6 @@
 # Copyright (c) HashiCorp, Inc.
 # SPDX-License-Identifier: MPL-2.0
 
-variable "cluster_name" {
-  description = "Name of target EKS cluster"
-  type        = string
-}
-
-variable "cluster_region" {
-  description = "Location of the EKS cluster"
-  type        = string
-}
-
 variable "tfc_hostname" {
   type        = string
   default     = "https://app.terraform.io"

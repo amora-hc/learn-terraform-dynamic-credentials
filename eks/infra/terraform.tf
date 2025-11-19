@@ -7,11 +7,16 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "2.23.0"
     }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 4.49.0"
+    }
   }
 
   cloud {
+    organization = "amora-hc"
     workspaces {
-      name = "learn-terraform-dynamic-credentials"
+      name = "eks-cloud-dynamic-credentials"
     }
   }
 }

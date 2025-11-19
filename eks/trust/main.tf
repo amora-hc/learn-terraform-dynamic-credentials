@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MPL-2.0
 
 provider "aws" {
-  region = var.cluster_region
+  region = data.terraform_remote_state.cluster.outputs.cluster-region
 }
 
 resource "aws_eks_identity_provider_config" "oidc_config" {
-  cluster_name = var.cluster_name
+  cluster_name = data.terraform_remote_state.cluster.outputs.cluster-name
 
   oidc {
     identity_provider_config_name = "terraform-cloud"
@@ -17,23 +17,19 @@ resource "aws_eks_identity_provider_config" "oidc_config" {
   }
 }
 
-data "aws_eks_cluster" "upstream" {
-  name = var.cluster_name
-}
-
 data "aws_eks_cluster_auth" "upstream_auth" {
-  name = var.cluster_name
+  name = data.terraform_remote_state.cluster.outputs.cluster-name
 }
 
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.upstream.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.upstream.certificate_authority[0].data)
+  host                   = data.terraform_remote_state.cluster.outputs.cluster-endpoint-url
+  cluster_ca_certificate = base64decode(data.terraform_remote_state.cluster.outputs.cluster-endpoint-ca)
   token                  = data.aws_eks_cluster_auth.upstream_auth.token
 }
 
 resource "kubernetes_cluster_role_binding_v1" "oidc_role" {
   metadata {
-    name = "odic-identity"
+    name = "oidc-identity"
   }
 
   role_ref {

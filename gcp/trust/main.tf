@@ -10,8 +10,9 @@ data "google_project" "project" {
 }
 
 resource "google_project_service" "services" {
-  count   = length(var.gcp_service_list)
-  service = var.gcp_service_list[count.index]
+  count              = length(var.gcp_service_list)
+  service            = var.gcp_service_list[count.index]
+  disable_on_destroy = false
 }
 
 resource "google_iam_workload_identity_pool" "tfc_pool" {
